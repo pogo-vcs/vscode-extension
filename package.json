@@ -7,17 +7,50 @@
     "vscode": "^1.104.0"
   },
   "categories": [
-    "Other"
+    "SCM Providers"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onFileSystem:file"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "pogo-vcs.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "pogo-vcs.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
       }
-    ]
+    ],
+    "views": {
+      "scm": [
+        {
+          "id": "pogoHistory",
+          "name": "Pogo History",
+          "type": "webview",
+          "when": "scmProvider == pogo"
+        }
+      ]
+    },
+    "menus": {
+      "scm/title": [
+        {
+          "command": "pogo-vcs.refresh",
+          "when": "scmProvider == pogo",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pogo-vcs.refresh",
+          "when": "view == pogoHistory",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
