@@ -28,7 +28,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _workspaceRoot: string
-	) {}
+	) { }
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -46,13 +46,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getLoadingHtml();
 
-		webviewView.webview.onDidReceiveMessage(data => {
-			switch (data.type) {
-			case "refresh":
-				this.refresh();
-				break;
-			}
-		});
+		// No message handling needed since refresh is handled by the title bar button
 
 		// Load initial content
 		this.refresh();
@@ -91,19 +85,6 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private _getHtmlForWebview(graphData: { graph?: ChangesGraph; error?: string }): string {
-		const refreshButton = `
-			<button onclick="refresh()" style="
-				background-color: var(--vscode-button-background);
-				color: var(--vscode-button-foreground);
-				border: none;
-				padding: 4px 8px;
-				border-radius: 2px;
-				cursor: pointer;
-				font-size: 12px;
-				margin-bottom: 10px;
-			">Refresh</button>
-		`;
-
 		if (graphData.error) {
 			return `<!DOCTYPE html>
 <html lang="en">
@@ -130,12 +111,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	</style>
 </head>
 <body>
-	${refreshButton}
 	<div class="error">${graphData.error}</div>
-	<script>
-		const vscode = acquireVsCodeApi();
-		function refresh() { vscode.postMessage({ type: 'refresh' }); }
-	</script>
 </body>
 </html>`;
 		}
@@ -146,8 +122,8 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	private async _getPogoGraph(): Promise<{ graph?: ChangesGraph; error?: string }> {
 		return new Promise((resolve) => {
 			const command = "pogo log --json";
-			
-			const execProcess = exec(command, { 
+
+			const execProcess = exec(command, {
 				cwd: this._workspaceRoot,
 				timeout: 10000
 			}, (error, stdout, stderr) => {
@@ -157,14 +133,14 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 					});
 					return;
 				}
-				
+
 				if (stderr) {
 					resolve({
 						error: `Pogo error: ${stderr}`
 					});
 					return;
 				}
-				
+
 				try {
 					const graph = JSON.parse(stdout || "{}") as ChangesGraph;
 					resolve({ graph });
@@ -187,53 +163,73 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private _getGraphHtml(graph: ChangesGraph): string {
-		const refreshButton = `
-			<button onclick="refresh()" style="
-				background-color: var(--vscode-button-background);
-				color: var(--vscode-button-foreground);
-				border: none;
-				padding: 4px 8px;
-				border-radius: 2px;
-				cursor: pointer;
-				font-size: 12px;
-				margin-bottom: 10px;
-			">Refresh</button>
-		`;
 
 		// Calculate SVG dimensions based on node positions
 		const maxX = Math.max(...graph.changes.map(c => c.x), 0);
 		const maxY = Math.max(...graph.changes.map(c => c.y), 0);
-		const svgWidth = (maxX + 2) * 16; // 1rem = 16px
-		const svgHeight = (maxY + 2) * 16;
+		const xScale = 8;
+		const yScale = 16;
+		const svgWidth = (maxX + 2) * xScale;
+		const svgHeight = (maxY + 2) * yScale;
 
 		// Generate SVG content
 		const edges = graph.adjacency_list.map(([from, to]) => {
 			const fromChange = graph.changes.find(c => c.name === from);
 			const toChange = graph.changes.find(c => c.name === to);
-			if (!fromChange || !toChange) {return "";}
-			
-			const x1 = (fromChange.x + 1) * 16;
-			const y1 = (fromChange.y + 1) * 16;
-			const x2 = (toChange.x + 1) * 16;
-			const y2 = (toChange.y + 1) * 16;
-			
+			if (!fromChange || !toChange) { return ""; }
+
+			const x1 = (fromChange.x + 1) * xScale;
+			const y1 = (fromChange.y + 1) * yScale;
+			const x2 = (toChange.x + 1) * xScale;
+			const y2 = (toChange.y + 1) * yScale;
+
 			return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--vscode-foreground)" stroke-width="1"/>`;
 		}).join("");
 
 		const nodes = graph.changes.map(change => {
-			const cx = (change.x + 1) * 16;
-			const cy = (change.y + 1) * 16;
-			return `<circle cx="${cx}" cy="${cy}" r="6" fill="var(--vscode-foreground)" stroke="var(--vscode-editor-background)" stroke-width="2"/>`;
+			const cx = (change.x + 1) * xScale;
+			const cy = (change.y + 1) * yScale;
+
+			// Determine color based on conflict state
+			const isInConflict = change.conflict_files && change.conflict_files.length > 0;
+			const nodeColor = isInConflict ?
+				"var(--vscode-errorForeground)" :
+				"var(--vscode-foreground)";
+
+			// Determine fill/stroke based on checkout state
+			const isCheckedOut = change.is_checked_out;
+			const fillColor = isCheckedOut ? nodeColor : "var(--vscode-editor-background)";
+			const strokeColor = nodeColor;
+
+			return `<circle cx="${cx}" cy="${cy}" r="6" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
 		}).join("");
 
 		// Generate change info list
 		const changeInfos = graph.changes.map(change => {
-			const topPosition = change.y * 16; // Align with node position
-			return `
+			const topPosition = (change.y + 1) * 16; // Align with node position (accounting for SVG padding)
+			const description = change.description ?
+				change.description :
+				"<span style=\"color: var(--vscode-gitDecoration-addedResourceForeground);\">(no description)</span>";
+
+			if (change.name === "~") {
+				return `
 				<div class="change-info" style="top: ${topPosition}px;">
-					<div class="change-name">${change.name}</div>
+					<div class="change-name">~</div>
+					<div class="change-description">&nbsp;</div>
 				</div>
 			`;
+			} else {
+				// Split change name into prefix (pink/purple) and suffix (gray)
+				const prefixHtml = `<span class="change-prefix">${change.unique_prefix}</span>`;
+				const suffixHtml = `<span class="change-suffix">${change.unique_suffix}</span>`;
+
+				return `
+				<div class="change-info" style="top: ${topPosition}px;">
+					<div class="change-name">${prefixHtml}${suffixHtml}</div>
+					<div class="change-description">${description}</div>
+				</div>
+			`;
+			}
 		}).join("");
 
 		return `<!DOCTYPE html>
@@ -253,25 +249,26 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 		}
 		
 		.container {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 10px;
+			display: flex;
+			gap: 4px;
 			height: calc(100vh - 60px);
+			overflow: auto;
 		}
 		
 		.graph-panel {
-			border: 1px solid var(--vscode-widget-border);
-			border-radius: 3px;
-			overflow: auto;
 			padding: 8px;
+			overflow: visible;
+			flex-shrink: 0;
+			width: ${svgWidth + 16}px; /* SVG width + padding */
 		}
 		
 		.info-panel {
-			border: 1px solid var(--vscode-widget-border);
-			border-radius: 3px;
-			overflow: auto;
 			padding: 8px;
 			position: relative;
+			overflow: visible;
+			min-height: ${svgHeight}px;
+			flex: 1;
+			min-width: 0; /* Allow flex item to shrink below content size */
 		}
 		
 		.change-info {
@@ -279,11 +276,34 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			left: 0;
 			right: 0;
 			padding: 4px 8px;
+			height: 32px; /* 2rem = 2 * 16px for the 2-unit spacing */
 		}
 		
 		.change-name {
 			font-weight: bold;
 			font-family: var(--vscode-editor-font-family, monospace);
+			line-height: 16px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		
+		.change-prefix {
+			color: var(--vscode-gitDecoration-modifiedResourceForeground, #e879f9);
+		}
+		
+		.change-suffix {
+			color: var(--vscode-descriptionForeground);
+		}
+		
+		.change-description {
+			font-size: 12px;
+			font-family: var(--vscode-editor-font-family, monospace);
+			line-height: 16px;
+			color: var(--vscode-descriptionForeground);
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 		
 		button:hover {
@@ -292,7 +312,6 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 	</style>
 </head>
 <body>
-	${refreshButton}
 	<div class="container">
 		<div class="graph-panel">
 			<svg width="${svgWidth}" height="${svgHeight}">
@@ -307,10 +326,6 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 
 	<script>
 		const vscode = acquireVsCodeApi();
-		
-		function refresh() {
-			vscode.postMessage({ type: 'refresh' });
-		}
 	</script>
 </body>
 </html>`;

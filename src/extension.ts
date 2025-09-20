@@ -49,7 +49,28 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
 						vscode.window.registerWebviewViewProvider(PogoHistoryViewProvider.viewType, historyProvider)
 					);
 					
-					console.log("Pogo WebviewView created successfully");
+					// Set up file watcher for .pogo.yaml
+					const pogoConfigPattern = new vscode.RelativePattern(workspaceFolder, ".pogo.yaml");
+					const fileWatcher = vscode.workspace.createFileSystemWatcher(pogoConfigPattern);
+					
+					fileWatcher.onDidChange(() => {
+						console.log("Pogo config changed, refreshing history view");
+						historyProvider.refresh();
+					});
+					
+					fileWatcher.onDidCreate(() => {
+						console.log("Pogo config created, refreshing history view");
+						historyProvider.refresh();
+					});
+					
+					fileWatcher.onDidDelete(() => {
+						console.log("Pogo config deleted");
+						// Could handle repository removal here if needed
+					});
+					
+					context.subscriptions.push(fileWatcher);
+					
+					console.log("Pogo WebviewView and file watcher created successfully");
 				} catch (error) {
 					console.error("Error initializing Pogo providers:", error);
 					vscode.window.showErrorMessage(`Error initializing Pogo extension: ${error}`);
