@@ -204,18 +204,45 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 		const svgWidth = (maxX + 2) * xScale;
 		const svgHeight = (maxY + 2) * yScale;
 
-		// Generate SVG content
+		// Generate SVG content with orthogonal edges
 		const edges = graph.adjacency_list.map(([from, to]) => {
 			const fromChange = graph.changes.find(c => c.name === from);
 			const toChange = graph.changes.find(c => c.name === to);
 			if (!fromChange || !toChange) { return ""; }
 
-			const x1 = (fromChange.x + 1) * xScale;
-			const y1 = (fromChange.y + 1) * yScale;
-			const x2 = (toChange.x + 1) * xScale;
-			const y2 = (toChange.y + 1) * yScale;
+			let x1 = (fromChange.x + 1) * xScale;
+			let y1 = (fromChange.y + 1) * yScale;
+			let x2 = (toChange.x + 1) * xScale;
+			let y2 = (toChange.y + 1) * yScale;
 
-			return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--vscode-foreground)" stroke-width="1"/>`;
+			if (y2 > y1) {
+				[x1, x2] = [x2, x1];
+				[y1, y2] = [y2, y1];
+			}
+
+			// If nodes have same x coordinate, draw straight line
+			if (x1 === x2) {
+				return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--vscode-foreground)" stroke-width="1"/>`;
+			}
+
+			// Generate orthogonal path with quarter-circle arc
+			const radius = 4; // Arc radius
+
+			// Determine arc direction based on relative positions
+			const deltaX = x2 - x1;
+			const deltaY = y2 - y1;
+
+			// Calculate arc start and end points
+			const arcStartX = x2 - Math.sign(deltaX) * radius;
+			const arcStartY = y1;
+			const arcEndX = x2;
+			const arcEndY = y1 + Math.sign(deltaY) * radius;
+
+			// Determine sweep direction (0 for clockwise, 1 for counter-clockwise)
+			const sweep = (deltaX > 0 && deltaY < 0) || (deltaX < 0 && deltaY > 0) ? 0 : 1;
+
+			const pathData = `M ${x1} ${y1} L ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 0 ${sweep} ${arcEndX} ${arcEndY} L ${x2} ${y2}`;
+			return `<path d="${pathData}" stroke="var(--vscode-foreground)" stroke-width="1" fill="none"/>`;
 		}).join("");
 
 		const nodes = graph.changes.map(change => {
