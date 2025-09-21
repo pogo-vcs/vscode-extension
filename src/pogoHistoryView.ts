@@ -46,7 +46,18 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getLoadingHtml();
 
-		// No message handling needed since refresh is handled by the title bar button
+		// Handle messages from the webview
+		webviewView.webview.onDidReceiveMessage(
+			message => {
+				switch (message.command) {
+				case "changeClick":
+					this._handleChangeClick(message.changeName);
+					return;
+				}
+			},
+			undefined,
+			[]
+		);
 
 		// Load initial content
 		this.refresh();
@@ -58,6 +69,27 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			const graphData = await this._getPogoGraph();
 			this._view.webview.html = this._getHtmlForWebview(graphData);
 		}
+	}
+
+	private _handleChangeClick(changeName: string) {
+		const command = `pogo edit ${changeName}`;
+
+		exec(command, {
+			cwd: this._workspaceRoot,
+			timeout: 10000
+		}, (error, _stdout, stderr) => {
+			if (error) {
+				vscode.window.showErrorMessage(`Error executing pogo edit: ${error.message}`);
+				return;
+			}
+
+			if (stderr) {
+				vscode.window.showErrorMessage(`Pogo error: ${stderr}`);
+				return;
+			}
+
+			// Success - the .pogo.yaml file change will trigger automatic rerender
+		});
 	}
 
 	private _getLoadingHtml(): string {
@@ -168,7 +200,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 		const maxX = Math.max(...graph.changes.map(c => c.x), 0);
 		const maxY = Math.max(...graph.changes.map(c => c.y), 0);
 		const xScale = 8;
-		const yScale = 16;
+		const yScale = 20;
 		const svgWidth = (maxX + 2) * xScale;
 		const svgHeight = (maxY + 2) * yScale;
 
@@ -201,12 +233,12 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			const fillColor = isCheckedOut ? nodeColor : "var(--vscode-editor-background)";
 			const strokeColor = nodeColor;
 
-			return `<circle cx="${cx}" cy="${cy}" r="6" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2"/>`;
+			return `<circle cx="${cx}" cy="${cy}" r="4" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" data-change-name="${change.name}" class="graph-node"/>`;
 		}).join("");
 
 		// Generate change info list
 		const changeInfos = graph.changes.map(change => {
-			const topPosition = (change.y + 1) * 16; // Align with node position (accounting for SVG padding)
+			const topPosition = (change.y + 1) * yScale - 8; // Align with node position (accounting for SVG padding)
 			const description = change.description ?
 				change.description :
 				"<span style=\"color: var(--vscode-gitDecoration-addedResourceForeground);\">(no description)</span>";
@@ -223,8 +255,14 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 				const prefixHtml = `<span class="change-prefix">${change.unique_prefix}</span>`;
 				const suffixHtml = `<span class="change-suffix">${change.unique_suffix}</span>`;
 
+				// Make clickable if not checked out
+				const isClickable = !change.is_checked_out;
+				const clickableClass = isClickable ? "clickable" : "";
+				const clickHandler = isClickable ? `onclick="handleChangeClick('${change.name}')"` : "";
+				const hoverHandlers = isClickable ? `onmouseenter="handleChangeHover('${change.name}')" onmouseleave="handleChangeUnhover('${change.name}')"` : "";
+
 				return `
-				<div class="change-info" style="top: ${topPosition}px;">
+				<div class="change-info ${clickableClass}" style="top: ${topPosition}px;" ${clickHandler} ${hoverHandlers} data-change-name="${change.name}" title="${(new Date(change.updated_at)).toLocaleString()}">
 					<div class="change-name">${prefixHtml}${suffixHtml}</div>
 					<div class="change-description">${description}</div>
 				</div>
@@ -246,6 +284,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			background-color: var(--vscode-editor-background);
 			margin: 0;
 			padding: 10px;
+			user-select: none;
 		}
 		
 		.container {
@@ -278,6 +317,15 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			padding: 4px 8px;
 			height: 32px; /* 2rem = 2 * 16px for the 2-unit spacing */
 		}
+
+		.change-info.clickable {
+			cursor: pointer;
+			border-radius: 3px;
+		}
+
+		.change-info.clickable:hover {
+			background-color: var(--vscode-list-hoverBackground);
+		}
 		
 		.change-name {
 			font-weight: bold;
@@ -306,6 +354,15 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			text-overflow: ellipsis;
 		}
 		
+		.graph-node {
+			transition: stroke-width 0.2s ease, r 0.2s ease;
+		}
+		
+		.graph-node.highlighted {
+			stroke-width: 3px !important;
+			r: 6px !important;
+		}
+		
 		button:hover {
 			background-color: var(--vscode-button-hoverBackground) !important;
 		}
@@ -326,6 +383,27 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 
 	<script>
 		const vscode = acquireVsCodeApi();
+		
+		function handleChangeClick(changeName) {
+			vscode.postMessage({
+				command: 'changeClick',
+				changeName: changeName
+			});
+		}
+		
+		function handleChangeHover(changeName) {
+			const node = document.querySelector(\`circle[data-change-name="\${changeName}"]\`);
+			if (node) {
+				node.classList.add('highlighted');
+			}
+		}
+		
+		function handleChangeUnhover(changeName) {
+			const node = document.querySelector(\`circle[data-change-name="\${changeName}"]\`);
+			if (node) {
+				node.classList.remove('highlighted');
+			}
+		}
 	</script>
 </body>
 </html>`;
