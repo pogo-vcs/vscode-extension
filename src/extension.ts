@@ -8,20 +8,19 @@ let activeHistoryProviders: PogoHistoryViewProvider[] = [];
 export async function activate(context: vscode.ExtensionContext) {
 	console.log("Pogo VCS extension is now active!");
 
-	const helloWorldDisposable = vscode.commands.registerCommand("pogo-vcs.helloWorld", () => {
-		vscode.window.showInformationMessage("Hello World from pogo!");
-	});
+	const refreshDisposable = vscode.commands.registerCommand(
+		"pogo-vcs.refresh",
+		async () => {
+			for (const provider of activePogoProviders) {
+				await provider.refresh();
+			}
+			for (const historyProvider of activeHistoryProviders) {
+				await historyProvider.refresh();
+			}
+		},
+	);
 
-	const refreshDisposable = vscode.commands.registerCommand("pogo-vcs.refresh", async () => {
-		for (const provider of activePogoProviders) {
-			await provider.refresh();
-		}
-		for (const historyProvider of activeHistoryProviders) {
-			await historyProvider.refresh();
-		}
-	});
-
-	context.subscriptions.push(helloWorldDisposable, refreshDisposable);
+	context.subscriptions.push(refreshDisposable);
 
 	await initializeSCMProviders(context);
 }
@@ -35,45 +34,61 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
 			if (isPogoRepo) {
 				try {
 					console.log(`Pogo repository detected at: ${workspaceRoot}`);
-					console.log("Pogo SCM provider is now handling version control for this workspace");
-					vscode.window.showInformationMessage(`Pogo repository detected! SCM provider active for: ${workspaceFolder.name}`);
-					
+					console.log(
+						"Pogo SCM provider is now handling version control for this workspace",
+					);
+					vscode.window.showInformationMessage(
+						`Pogo repository detected! SCM provider active for: ${workspaceFolder.name}`,
+					);
+
 					const provider = new PogoSCMProvider(workspaceRoot);
 					activePogoProviders.push(provider);
 					context.subscriptions.push(provider);
-					
-					const historyProvider = new PogoHistoryViewProvider(context.extensionUri, workspaceRoot);
-					activeHistoryProviders.push(historyProvider);
-					
-					context.subscriptions.push(
-						vscode.window.registerWebviewViewProvider(PogoHistoryViewProvider.viewType, historyProvider)
+
+					const historyProvider = new PogoHistoryViewProvider(
+						context.extensionUri,
+						workspaceRoot,
 					);
-					
+					activeHistoryProviders.push(historyProvider);
+
+					context.subscriptions.push(
+						vscode.window.registerWebviewViewProvider(
+							PogoHistoryViewProvider.viewType,
+							historyProvider,
+						),
+					);
+
 					// Set up file watcher for .pogo.yaml
-					const pogoConfigPattern = new vscode.RelativePattern(workspaceFolder, ".pogo.yaml");
-					const fileWatcher = vscode.workspace.createFileSystemWatcher(pogoConfigPattern);
-					
+					const pogoConfigPattern = new vscode.RelativePattern(
+						workspaceFolder,
+						".pogo.yaml",
+					);
+					const fileWatcher =
+            vscode.workspace.createFileSystemWatcher(pogoConfigPattern);
+
 					fileWatcher.onDidChange(() => {
 						console.log("Pogo config changed, refreshing history view");
 						historyProvider.refresh();
 					});
-					
+
 					fileWatcher.onDidCreate(() => {
 						console.log("Pogo config created, refreshing history view");
 						historyProvider.refresh();
 					});
-					
+
 					fileWatcher.onDidDelete(() => {
 						console.log("Pogo config deleted");
 						// Could handle repository removal here if needed
 					});
-					
+
 					context.subscriptions.push(fileWatcher);
-					
+
 					console.log("Pogo WebviewView and file watcher created successfully");
 				} catch (error) {
 					console.error("Error initializing Pogo providers:", error);
-					vscode.window.showErrorMessage(`Error initializing Pogo extension: ${error}`);
+					vscode.window.showErrorMessage(
+						`Error initializing Pogo extension: ${error}`,
+					);
 				}
 			}
 		}
@@ -81,4 +96,4 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {}

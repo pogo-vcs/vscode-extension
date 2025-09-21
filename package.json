@@ -2,14 +2,20 @@
   "name": "pogo-vcs",
   "displayName": "pogo",
   "description": "Get the most out of Pogo VCS inside of VS Code",
+  "icon": "icon.png",
   "repository": "https://github.com/pogo-vcs/vscode-extension",
   "publisher": "pogo-vcs",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.104.0"
   },
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
   "categories": [
-    "SCM Providers"
+    "SCM Providers",
+    "Other"
   ],
   "activationEvents": [
     "onFileSystem:file"
@@ -17,10 +23,6 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "pogo-vcs.helloWorld",
-        "title": "Hello World"
-      },
       {
         "command": "pogo-vcs.refresh",
         "title": "Refresh",
@@ -31,7 +33,7 @@
       "scm": [
         {
           "id": "pogoHistory",
-          "name": "Pogo History",
+          "name": "Pogo Log",
           "type": "webview",
           "when": "scmProvider == pogo"
         }
