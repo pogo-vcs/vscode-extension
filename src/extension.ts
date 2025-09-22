@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import { PogoSCMProvider } from "./pogoSCM";
 import { PogoHistoryViewProvider } from "./pogoHistoryView";
+import { PogoDescriptionViewProvider } from "./pogoDescriptionView";
 
 let activePogoProviders: PogoSCMProvider[] = [];
 let activeHistoryProviders: PogoHistoryViewProvider[] = [];
+let activeDescriptionProviders: PogoDescriptionViewProvider[] = [];
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log("Pogo VCS extension is now active!");
@@ -16,6 +18,9 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 			for (const historyProvider of activeHistoryProviders) {
 				await historyProvider.refresh();
+			}
+			for (const descriptionProvider of activeDescriptionProviders) {
+				await descriptionProvider.refresh();
 			}
 		},
 	);
@@ -55,6 +60,19 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
 						vscode.window.registerWebviewViewProvider(
 							PogoHistoryViewProvider.viewType,
 							historyProvider,
+						),
+					);
+
+					const descriptionProvider = new PogoDescriptionViewProvider(
+						context.extensionUri,
+						workspaceRoot,
+					);
+					activeDescriptionProviders.push(descriptionProvider);
+
+					context.subscriptions.push(
+						vscode.window.registerWebviewViewProvider(
+							PogoDescriptionViewProvider.viewType,
+							descriptionProvider,
 						),
 					);
 

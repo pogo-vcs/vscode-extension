@@ -49,6 +49,12 @@
     "views": {
       "scm": [
         {
+          "id": "pogoDescription",
+          "name": "Change Description",
+          "type": "webview",
+          "when": "scmProvider == pogo"
+        },
+        {
           "id": "pogoHistory",
           "name": "Pogo Log",
           "type": "webview",
@@ -68,6 +74,11 @@
         {
           "command": "pogo-vcs.refresh",
           "when": "view == pogoHistory",
+          "group": "navigation"
+        },
+        {
+          "command": "pogo-vcs.refresh",
+          "when": "view == pogoDescription",
           "group": "navigation"
         }
       ]

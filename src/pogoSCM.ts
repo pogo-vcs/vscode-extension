@@ -9,12 +9,7 @@ export class PogoSCMProvider implements vscode.Disposable {
 	constructor(private _workspaceRoot: string) {
 		this._sourceControl = vscode.scm.createSourceControl("pogo", "Pogo", vscode.Uri.file(this._workspaceRoot));
 		this._sourceControl.quickDiffProvider = this;
-		this._sourceControl.acceptInputCommand = {
-			command: "pogo-vcs.commit",
-			title: "Commit"
-		};
-		this._sourceControl.inputBox.placeholder = "Message (press Ctrl+Enter to commit)";
-		
+
 		this._disposables.push(this._sourceControl);
 	}
 
@@ -31,7 +26,7 @@ export class PogoSCMProvider implements vscode.Disposable {
 	}
 
 	async refresh(): Promise<void> {
-		// Refresh is now handled by the TreeView
+		// No-op since we removed the input box functionality
 	}
 
 	static async detectRepository(workspaceRoot: string): Promise<boolean> {
