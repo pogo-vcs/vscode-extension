@@ -41,6 +41,11 @@
         }
       }
     },
+    "configurationDefaults": {
+      "files.exclude": {
+        "**/.pogo.yaml": true
+      }
+    },
     "views": {
       "scm": [
         {
