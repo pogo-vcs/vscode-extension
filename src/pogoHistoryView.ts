@@ -240,7 +240,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 		const svgHeight = (maxY + 2) * yScale;
 
 		// Generate SVG content with orthogonal edges
-		const edges = graph.adjacency_list.map(([from, to]) => {
+		const edges = graph.adjacency_list ? graph.adjacency_list.map(([from, to]) => {
 			const fromChange = graph.changes.find(c => c.name === from);
 			const toChange = graph.changes.find(c => c.name === to);
 			if (!fromChange || !toChange) { return ""; }
@@ -278,7 +278,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 
 			const pathData = `M ${x1} ${y1} L ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 0 ${sweep} ${arcEndX} ${arcEndY} L ${x2} ${y2}`;
 			return `<path d="${pathData}" stroke="var(--vscode-foreground)" stroke-width="1" fill="none"/>`;
-		}).join("");
+		}).join("") : "";
 
 		const nodes = graph.changes.map(change => {
 			const cx = (change.x + 1) * xScale;
