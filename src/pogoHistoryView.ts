@@ -20,15 +20,23 @@ interface ChangesGraph {
 	adjacency_list: Array<[string, string]>;
 }
 
-export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
+export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
 	public static readonly viewType = "pogoHistory";
 
 	private _view?: vscode.WebviewView;
+	private _autoRefreshTimer?: NodeJS.Timeout;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 		private readonly _workspaceRoot: string
 	) { }
+
+	public dispose() {
+		if (this._autoRefreshTimer) {
+			clearInterval(this._autoRefreshTimer);
+			this._autoRefreshTimer = undefined;
+		}
+	}
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
@@ -61,6 +69,9 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 
 		// Load initial content
 		this.refresh();
+
+		// Start auto-refresh timer
+		this._startAutoRefreshTimer();
 	}
 
 	public async refresh() {
@@ -69,6 +80,30 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider {
 			const graphData = await this._getPogoGraph();
 			this._view.webview.html = this._getHtmlForWebview(graphData);
 		}
+
+		// Reset auto-refresh timer after manual/file-triggered refresh
+		this._resetAutoRefreshTimer();
+	}
+
+	private _startAutoRefreshTimer() {
+		this._resetAutoRefreshTimer();
+	}
+
+	private _resetAutoRefreshTimer() {
+		// Clear existing timer
+		if (this._autoRefreshTimer) {
+			clearInterval(this._autoRefreshTimer);
+		}
+
+		// Get refresh interval from configuration (in minutes, convert to milliseconds)
+		const config = vscode.workspace.getConfiguration("pogo");
+		const intervalMinutes = config.get("historyView.autoRefreshInterval", 5);
+		const intervalMs = intervalMinutes * 60 * 1000;
+
+		// Start new timer
+		this._autoRefreshTimer = setInterval(() => {
+			this.refresh();
+		}, intervalMs);
 	}
 
 	private _handleChangeClick(changeName: string) {

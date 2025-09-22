@@ -29,6 +29,18 @@
         "icon": "$(refresh)"
       }
     ],
+    "configuration": {
+      "title": "Pogo",
+      "properties": {
+        "pogo.historyView.autoRefreshInterval": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 60,
+          "description": "Auto-refresh interval for the Pogo history view in minutes (1-60)"
+        }
+      }
+    },
     "views": {
       "scm": [
         {
