@@ -1,11 +1,9 @@
 import * as vscode from "vscode";
 import { PogoSCMProvider } from "./pogoSCM";
 import { PogoHistoryViewProvider } from "./pogoHistoryView";
-import { PogoDescriptionViewProvider } from "./pogoDescriptionView";
 
 let activePogoProviders: PogoSCMProvider[] = [];
 let activeHistoryProviders: PogoHistoryViewProvider[] = [];
-let activeDescriptionProviders: PogoDescriptionViewProvider[] = [];
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log("Pogo VCS extension is now active!");
@@ -18,9 +16,6 @@ export async function activate(context: vscode.ExtensionContext) {
 			}
 			for (const historyProvider of activeHistoryProviders) {
 				await historyProvider.refresh();
-			}
-			for (const descriptionProvider of activeDescriptionProviders) {
-				await descriptionProvider.refresh();
 			}
 		},
 	);
@@ -38,41 +33,20 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
 
 			if (isPogoRepo) {
 				try {
-					console.log(`Pogo repository detected at: ${workspaceRoot}`);
-					console.log(
-						"Pogo SCM provider is now handling version control for this workspace",
-					);
-					vscode.window.showInformationMessage(
-						`Pogo repository detected! SCM provider active for: ${workspaceFolder.name}`,
-					);
-
-					const provider = new PogoSCMProvider(workspaceRoot);
-					activePogoProviders.push(provider);
-					context.subscriptions.push(provider);
-
 					const historyProvider = new PogoHistoryViewProvider(
 						context.extensionUri,
 						workspaceRoot,
 					);
 					activeHistoryProviders.push(historyProvider);
 
+					const provider = new PogoSCMProvider(workspaceRoot, historyProvider);
+					activePogoProviders.push(provider);
+					context.subscriptions.push(provider);
+
 					context.subscriptions.push(
 						vscode.window.registerWebviewViewProvider(
 							PogoHistoryViewProvider.viewType,
 							historyProvider,
-						),
-					);
-
-					const descriptionProvider = new PogoDescriptionViewProvider(
-						context.extensionUri,
-						workspaceRoot,
-					);
-					activeDescriptionProviders.push(descriptionProvider);
-
-					context.subscriptions.push(
-						vscode.window.registerWebviewViewProvider(
-							PogoDescriptionViewProvider.viewType,
-							descriptionProvider,
 						),
 					);
 
@@ -85,13 +59,15 @@ async function initializeSCMProviders(context: vscode.ExtensionContext) {
             vscode.workspace.createFileSystemWatcher(pogoConfigPattern);
 
 					fileWatcher.onDidChange(() => {
-						console.log("Pogo config changed, refreshing history view");
+						console.log("Pogo config changed, refreshing both views");
 						historyProvider.refresh();
+						provider.refresh();
 					});
 
 					fileWatcher.onDidCreate(() => {
-						console.log("Pogo config created, refreshing history view");
+						console.log("Pogo config created, refreshing both views");
 						historyProvider.refresh();
+						provider.refresh();
 					});
 
 					fileWatcher.onDidDelete(() => {

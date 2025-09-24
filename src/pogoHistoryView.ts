@@ -2,34 +2,36 @@ import * as vscode from "vscode";
 import { exec } from "child_process";
 
 interface Change {
-	name: string;
-	unique_prefix: string;
-	unique_suffix: string;
-	description: string;
-	conflict_files: string[] | null;
-	created_at: string; // ISO 8601 timestamp
-	updated_at: string; // ISO 8601 timestamp
-	is_checked_out: boolean;
-	x: number;
-	y: number;
+  name: string;
+  unique_prefix: string;
+  unique_suffix: string;
+  description: string;
+  conflict_files: string[] | null;
+  created_at: string; // ISO 8601 timestamp
+  updated_at: string; // ISO 8601 timestamp
+  is_checked_out: boolean;
+  x: number;
+  y: number;
 }
 
 interface ChangesGraph {
-	changes: Change[];
-	// Each tuple represents an edge between two change names
-	adjacency_list: Array<[string, string]>;
+  changes: Change[];
+  // Each tuple represents an edge between two change names
+  adjacency_list: Array<[string, string]>;
 }
 
-export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+export class PogoHistoryViewProvider
+implements vscode.WebviewViewProvider, vscode.Disposable
+{
 	public static readonly viewType = "pogoHistory";
 
 	private _view?: vscode.WebviewView;
 	private _autoRefreshTimer?: NodeJS.Timeout;
 
 	constructor(
-		private readonly _extensionUri: vscode.Uri,
-		private readonly _workspaceRoot: string
-	) { }
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _workspaceRoot: string,
+	) {}
 
 	public dispose() {
 		if (this._autoRefreshTimer) {
@@ -47,16 +49,14 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 
 		webviewView.webview.options = {
 			enableScripts: true,
-			localResourceRoots: [
-				this._extensionUri
-			]
+			localResourceRoots: [this._extensionUri],
 		};
 
 		webviewView.webview.html = this._getLoadingHtml();
 
 		// Handle messages from the webview
 		webviewView.webview.onDidReceiveMessage(
-			message => {
+			(message) => {
 				switch (message.command) {
 				case "changeClick":
 					this._handleChangeClick(message.changeName);
@@ -64,7 +64,7 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 				}
 			},
 			undefined,
-			[]
+			[],
 		);
 
 		// Load initial content
@@ -109,22 +109,28 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 	private _handleChangeClick(changeName: string) {
 		const command = `pogo edit ${changeName}`;
 
-		exec(command, {
-			cwd: this._workspaceRoot,
-			timeout: 10000
-		}, (error, _stdout, stderr) => {
-			if (error) {
-				vscode.window.showErrorMessage(`Error executing pogo edit: ${error.message}`);
-				return;
-			}
+		exec(
+			command,
+			{
+				cwd: this._workspaceRoot,
+				timeout: 10000,
+			},
+			(error, _stdout, stderr) => {
+				if (error) {
+					vscode.window.showErrorMessage(
+						`Error executing pogo edit: ${error.message}`,
+					);
+					return;
+				}
 
-			if (stderr) {
-				vscode.window.showErrorMessage(`Pogo error: ${stderr}`);
-				return;
-			}
+				if (stderr) {
+					vscode.window.showErrorMessage(`Pogo error: ${stderr}`);
+					return;
+				}
 
-			// Success - the .pogo.yaml file change will trigger automatic rerender
-		});
+				// Success - the .pogo.yaml file change will trigger automatic rerender
+			},
+		);
 	}
 
 	private _getLoadingHtml(): string {
@@ -151,7 +157,10 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 </html>`;
 	}
 
-	private _getHtmlForWebview(graphData: { graph?: ChangesGraph; error?: string }): string {
+	private _getHtmlForWebview(graphData: {
+    graph?: ChangesGraph;
+    error?: string;
+  }): string {
 		if (graphData.error) {
 			return `<!DOCTYPE html>
 <html lang="en">
@@ -186,43 +195,50 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 		return this._getGraphHtml(graphData.graph!);
 	}
 
-	private async _getPogoGraph(): Promise<{ graph?: ChangesGraph; error?: string }> {
+	private async _getPogoGraph(): Promise<{
+    graph?: ChangesGraph;
+    error?: string;
+  }> {
 		return new Promise((resolve) => {
 			const command = "pogo log --json";
 
-			const execProcess = exec(command, {
-				cwd: this._workspaceRoot,
-				timeout: 10000
-			}, (error, stdout, stderr) => {
-				if (error) {
-					resolve({
-						error: `Error executing pogo log: ${error.message}`
-					});
-					return;
-				}
+			const execProcess = exec(
+				command,
+				{
+					cwd: this._workspaceRoot,
+					timeout: 10000,
+				},
+				(error, stdout, stderr) => {
+					if (error) {
+						resolve({
+							error: `Error executing pogo log: ${error.message}`,
+						});
+						return;
+					}
 
-				if (stderr) {
-					resolve({
-						error: `Pogo error: ${stderr}`
-					});
-					return;
-				}
+					if (stderr) {
+						resolve({
+							error: `Pogo error: ${stderr}`,
+						});
+						return;
+					}
 
-				try {
-					const graph = JSON.parse(stdout || "{}") as ChangesGraph;
-					resolve({ graph });
-				} catch (parseError) {
-					resolve({
-						error: `Error parsing JSON: ${parseError}`
-					});
-				}
-			});
+					try {
+						const graph = JSON.parse(stdout || "{}") as ChangesGraph;
+						resolve({ graph });
+					} catch (parseError) {
+						resolve({
+							error: `Error parsing JSON: ${parseError}`,
+						});
+					}
+				},
+			);
 
 			setTimeout(() => {
 				if (execProcess.killed === false) {
 					execProcess.kill();
 					resolve({
-						error: "Error: Command timed out"
+						error: "Error: Command timed out",
 					});
 				}
 			}, 12000);
@@ -230,107 +246,124 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 	}
 
 	private _getGraphHtml(graph: ChangesGraph): string {
-
 		// Calculate SVG dimensions based on node positions
-		const maxX = Math.max(...graph.changes.map(c => c.x), 0);
-		const maxY = Math.max(...graph.changes.map(c => c.y), 0);
+		const maxX = Math.max(...graph.changes.map((c) => c.x), 0);
+		const maxY = Math.max(...graph.changes.map((c) => c.y), 0);
 		const xScale = 8;
 		const yScale = 20;
 		const svgWidth = (maxX + 2) * xScale;
 		const svgHeight = (maxY + 2) * yScale;
 
 		// Generate SVG content with orthogonal edges
-		const edges = graph.adjacency_list ? graph.adjacency_list.map(([from, to]) => {
-			const fromChange = graph.changes.find(c => c.name === from);
-			const toChange = graph.changes.find(c => c.name === to);
-			if (!fromChange || !toChange) { return ""; }
+		const edges = graph.adjacency_list
+			? graph.adjacency_list
+				.map(([from, to]) => {
+					const fromChange = graph.changes.find((c) => c.name === from);
+					const toChange = graph.changes.find((c) => c.name === to);
+					if (!fromChange || !toChange) {
+						return "";
+					}
 
-			let x1 = (fromChange.x + 1) * xScale;
-			let y1 = (fromChange.y + 1) * yScale;
-			let x2 = (toChange.x + 1) * xScale;
-			let y2 = (toChange.y + 1) * yScale;
+					let x1 = (fromChange.x + 1) * xScale;
+					let y1 = (fromChange.y + 1) * yScale;
+					let x2 = (toChange.x + 1) * xScale;
+					let y2 = (toChange.y + 1) * yScale;
 
-			if (y2 > y1) {
-				[x1, x2] = [x2, x1];
-				[y1, y2] = [y2, y1];
-			}
+					if (y2 > y1) {
+						[x1, x2] = [x2, x1];
+						[y1, y2] = [y2, y1];
+					}
 
-			// If nodes have same x coordinate, draw straight line
-			if (x1 === x2) {
-				return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--vscode-foreground)" stroke-width="1"/>`;
-			}
+					// If nodes have same x coordinate, draw straight line
+					if (x1 === x2) {
+						return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--vscode-foreground)" stroke-width="1"/>`;
+					}
 
-			// Generate orthogonal path with quarter-circle arc
-			const radius = 4; // Arc radius
+					// Generate orthogonal path with quarter-circle arc
+					const radius = 4; // Arc radius
 
-			// Determine arc direction based on relative positions
-			const deltaX = x2 - x1;
-			const deltaY = y2 - y1;
+					// Determine arc direction based on relative positions
+					const deltaX = x2 - x1;
+					const deltaY = y2 - y1;
 
-			// Calculate arc start and end points
-			const arcStartX = x2 - Math.sign(deltaX) * radius;
-			const arcStartY = y1;
-			const arcEndX = x2;
-			const arcEndY = y1 + Math.sign(deltaY) * radius;
+					// Calculate arc start and end points
+					const arcStartX = x2 - Math.sign(deltaX) * radius;
+					const arcStartY = y1;
+					const arcEndX = x2;
+					const arcEndY = y1 + Math.sign(deltaY) * radius;
 
-			// Determine sweep direction (0 for clockwise, 1 for counter-clockwise)
-			const sweep = (deltaX > 0 && deltaY < 0) || (deltaX < 0 && deltaY > 0) ? 0 : 1;
+					// Determine sweep direction (0 for clockwise, 1 for counter-clockwise)
+					const sweep =
+              (deltaX > 0 && deltaY < 0) || (deltaX < 0 && deltaY > 0) ? 0 : 1;
 
-			const pathData = `M ${x1} ${y1} L ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 0 ${sweep} ${arcEndX} ${arcEndY} L ${x2} ${y2}`;
-			return `<path d="${pathData}" stroke="var(--vscode-foreground)" stroke-width="1" fill="none"/>`;
-		}).join("") : "";
+					const pathData = `M ${x1} ${y1} L ${arcStartX} ${arcStartY} A ${radius} ${radius} 0 0 ${sweep} ${arcEndX} ${arcEndY} L ${x2} ${y2}`;
+					return `<path d="${pathData}" stroke="var(--vscode-foreground)" stroke-width="1" fill="none"/>`;
+				})
+				.join("")
+			: "";
 
-		const nodes = graph.changes.map(change => {
-			const cx = (change.x + 1) * xScale;
-			const cy = (change.y + 1) * yScale;
+		const nodes = graph.changes
+			.map((change) => {
+				const cx = (change.x + 1) * xScale;
+				const cy = (change.y + 1) * yScale;
 
-			// Determine color based on conflict state
-			const isInConflict = change.conflict_files && change.conflict_files.length > 0;
-			const nodeColor = isInConflict ?
-				"var(--vscode-errorForeground)" :
-				"var(--vscode-foreground)";
+				// Determine color based on conflict state
+				const isInConflict =
+          change.conflict_files && change.conflict_files.length > 0;
+				const nodeColor = isInConflict
+					? "var(--vscode-errorForeground)"
+					: "var(--vscode-foreground)";
 
-			// Determine fill/stroke based on checkout state
-			const isCheckedOut = change.is_checked_out;
-			const fillColor = isCheckedOut ? nodeColor : "var(--vscode-editor-background)";
-			const strokeColor = nodeColor;
+				// Determine fill/stroke based on checkout state
+				const isCheckedOut = change.is_checked_out;
+				const fillColor = isCheckedOut
+					? nodeColor
+					: "var(--vscode-editor-background)";
+				const strokeColor = nodeColor;
 
-			return `<circle cx="${cx}" cy="${cy}" r="4" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" data-change-name="${change.name}" class="graph-node"/>`;
-		}).join("");
+				return `<circle cx="${cx}" cy="${cy}" r="4" fill="${fillColor}" stroke="${strokeColor}" stroke-width="2" data-change-name="${change.name}" class="graph-node"/>`;
+			})
+			.join("");
 
 		// Generate change info list
-		const changeInfos = graph.changes.map(change => {
-			const topPosition = (change.y + 1) * yScale - 8; // Align with node position (accounting for SVG padding)
-			const description = change.description ?
-				change.description :
-				"<span style=\"color: var(--vscode-gitDecoration-addedResourceForeground);\">(no description)</span>";
+		const changeInfos = graph.changes
+			.map((change) => {
+				const topPosition = (change.y + 1) * yScale - 8; // Align with node position (accounting for SVG padding)
+				const description = change.description
+					? change.description
+					: '<span style="color: var(--vscode-gitDecoration-addedResourceForeground);">(no description)</span>';
 
-			if (change.name === "~") {
-				return `
+				if (change.name === "~") {
+					return `
 				<div class="change-info" style="top: ${topPosition}px;">
 					<div class="change-name">~</div>
 					<div class="change-description">&nbsp;</div>
 				</div>
 			`;
-			} else {
-				// Split change name into prefix (pink/purple) and suffix (gray)
-				const prefixHtml = `<span class="change-prefix">${change.unique_prefix}</span>`;
-				const suffixHtml = `<span class="change-suffix">${change.unique_suffix}</span>`;
+				} else {
+					// Split change name into prefix (pink/purple) and suffix (gray)
+					const prefixHtml = `<span class="change-prefix">${change.unique_prefix}</span>`;
+					const suffixHtml = `<span class="change-suffix">${change.unique_suffix}</span>`;
 
-				// Make clickable if not checked out
-				const isClickable = !change.is_checked_out;
-				const clickableClass = isClickable ? "clickable" : "";
-				const clickHandler = isClickable ? `onclick="handleChangeClick('${change.name}')"` : "";
-				const hoverHandlers = isClickable ? `onmouseenter="handleChangeHover('${change.name}')" onmouseleave="handleChangeUnhover('${change.name}')"` : "";
+					// Make clickable if not checked out
+					const isClickable = !change.is_checked_out;
+					const clickableClass = isClickable ? "clickable" : "";
+					const clickHandler = isClickable
+						? `onclick="handleChangeClick('${change.name}')"`
+						: "";
+					const hoverHandlers = isClickable
+						? `onmouseenter="handleChangeHover('${change.name}')" onmouseleave="handleChangeUnhover('${change.name}')"`
+						: "";
 
-				return `
-				<div class="change-info ${clickableClass}" style="top: ${topPosition}px;" ${clickHandler} ${hoverHandlers} data-change-name="${change.name}" title="${(new Date(change.updated_at)).toLocaleString()}">
+					return `
+				<div class="change-info ${clickableClass}" style="top: ${topPosition}px;" ${clickHandler} ${hoverHandlers} data-change-name="${change.name}" title="${new Date(change.updated_at).toLocaleString()}">
 					<div class="change-name">${prefixHtml}${suffixHtml}</div>
 					<div class="change-description">${description}</div>
 				</div>
 			`;
-			}
-		}).join("");
+				}
+			})
+			.join("");
 
 		return `<!DOCTYPE html>
 <html lang="en">
@@ -471,3 +504,4 @@ export class PogoHistoryViewProvider implements vscode.WebviewViewProvider, vsco
 </html>`;
 	}
 }
+
